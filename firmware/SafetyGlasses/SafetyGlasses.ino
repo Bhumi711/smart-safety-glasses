@@ -1,9 +1,11 @@
+#include <Arduino.h>
+#include "config.h"
+
+#include "gps_module.h"
 #include "bluetooth_module.h"
 #include "storage_module.h"
 #include "camera_module.h"
 #include "audio_module.h"
-#include <Arduino.h>
-#include "config.h"
 
 enum SystemState {
   SYSTEM_READY,
@@ -12,20 +14,28 @@ enum SystemState {
 
 SystemState systemState = SYSTEM_READY;
 
+BluetoothModule bluetooth;
+GPSModule gps;
+StorageModule storage;
+CameraModule camera;
+AudioModule audio;
+
 bool lastRawButtonState = HIGH;
 bool stableButtonState = HIGH;
-
 unsigned long lastDebounceTime = 0;
 
-void handleSOS() {
+void activateSOS() {
+  if (systemState == SYSTEM_EMERGENCY) return;
+
   systemState = SYSTEM_EMERGENCY;
 
-  Serial.println("================================");
-  Serial.println("SOS ACTIVATED!");
+  Serial.println("SOS ACTIVATED");
   Serial.println("Emergency workflow started.");
-  Serial.println("GPS, recording, storage and BLE");
-  Serial.println("will be integrated in later steps.");
-  Serial.println("================================");
+
+  // TODO: Read current GPS location.
+  // TODO: Send SOS message through BLE.
+  // TODO: Save event to microSD.
+  // TODO: Start evidence capture when implemented.
 }
 
 void setup() {
@@ -40,14 +50,15 @@ void setup() {
     pinMode(SOS_BUTTON_PIN, INPUT_PULLUP);
     Serial.println("SOS button configured.");
   } else {
-    Serial.println("SOS button GPIO not configured yet.");
+    Serial.println("SOS GPIO pending board verification.");
   }
 
-  Serial.println("System ready.");
+  // Peripheral initialization will be added after
+  // the exact board pin mapping is verified.
+  Serial.println("System setup complete.");
 }
 
 void loop() {
-  // Do not access a GPIO until the board pin is verified.
   if (SOS_BUTTON_PIN < 0) {
     delay(100);
     return;
@@ -60,17 +71,17 @@ void loop() {
     lastRawButtonState = rawButtonState;
   }
 
-  if ((millis() - lastDebounceTime) >= BUTTON_DEBOUNCE_MS) {
+  if (millis() - lastDebounceTime >= BUTTON_DEBOUNCE_MS) {
     if (rawButtonState != stableButtonState) {
       stableButtonState = rawButtonState;
 
-      // INPUT_PULLUP: LOW means pressed.
       if (stableButtonState == LOW &&
           systemState == SYSTEM_READY) {
-        handleSOS();
+        activateSOS();
       }
     }
   }
 
+  // Non-blocking GPS/BLE/storage tasks will be added here.
   delay(5);
 }
