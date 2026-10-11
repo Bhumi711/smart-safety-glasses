@@ -1,4 +1,5 @@
 #include "bluetooth_module.h"
+#include "storage_module.h"
 #include <Arduino.h>
 #include "config.h"
 
