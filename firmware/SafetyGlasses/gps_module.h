@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
+#include "config.h"
 
 struct GPSLocation {
   double latitude = 0.0;
@@ -14,9 +15,18 @@ struct GPSLocation {
 class GPSModule {
 public:
   void begin(HardwareSerial &serialPort,
-             uint32_t baudRate = 9600) {
+             uint32_t baudRate = GPS_BAUD_RATE) {
     gpsSerial = &serialPort;
-    gpsSerial->begin(baudRate);
+
+    // GPS TX connects to ESP32 GPIO 1.
+    gpsSerial->begin(
+      baudRate,
+      SERIAL_8N1,
+      GPS_RX_PIN,
+      -1
+    );
+
+    Serial.println("GPS serial started");
   }
 
   void update() {
@@ -30,7 +40,8 @@ public:
   GPSLocation getLocation() {
     GPSLocation location;
 
-    if (gps.location.isValid()) {
+    if (gps.location.isValid() &&
+        gps.location.age() < 10000) {
       location.latitude = gps.location.lat();
       location.longitude = gps.location.lng();
       location.valid = true;

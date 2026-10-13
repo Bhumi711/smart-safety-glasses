@@ -1,11 +1,8 @@
+
 #include <Arduino.h>
 #include "config.h"
-
 #include "gps_module.h"
 #include "bluetooth_module.h"
-#include "storage_module.h"
-#include "camera_module.h"
-#include "audio_module.h"
 
 enum SystemState {
   SYSTEM_READY,
@@ -14,28 +11,34 @@ enum SystemState {
 
 SystemState systemState = SYSTEM_READY;
 
-BluetoothModule bluetooth;
+HardwareSerial GPSSerial(1);
 GPSModule gps;
-StorageModule storage;
-CameraModule camera;
-AudioModule audio;
+BluetoothModule bluetooth;
 
 bool lastRawButtonState = HIGH;
 bool stableButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
+unsigned long lastGPSUpdate = 0;
 
 void activateSOS() {
   if (systemState == SYSTEM_EMERGENCY) return;
 
   systemState = SYSTEM_EMERGENCY;
+  GPSLocation location = gps.getLocation();
+
+  String message;
+
+  if (location.valid) {
+    message = "SOS,LAT:";
+    message += String(location.latitude, 6);
+    message += ",LON:";
+    message += String(location.longitude, 6);
+  } else {
+    message = "SOS,GPS_FIX_UNAVAILABLE";
+  }
 
   Serial.println("SOS ACTIVATED");
-  Serial.println("Emergency workflow started.");
-
-  // TODO: Read current GPS location.
-  // TODO: Send SOS message through BLE.
-  // TODO: Save event to microSD.
-  // TODO: Start evidence capture when implemented.
+  bluetooth.sendMessage(message);
 }
 
 void setup() {
@@ -44,34 +47,46 @@ void setup() {
 
   Serial.println();
   Serial.println("Smart Safety Glasses");
-  Serial.println("Firmware starting...");
+  Serial.println("Starting GPS + BLE + SOS...");
 
-  if (SOS_BUTTON_PIN >= 0) {
-    pinMode(SOS_BUTTON_PIN, INPUT_PULLUP);
-    Serial.println("SOS button configured.");
-  } else {
-    Serial.println("SOS GPIO pending board verification.");
-  }
+  pinMode(SOS_BUTTON_PIN, INPUT_PULLUP);
 
-  // Peripheral initialization will be added after
-  // the exact board pin mapping is verified.
-  Serial.println("System setup complete.");
+  gps.begin(GPSSerial, GPS_BAUD_RATE);
+  bluetooth.begin(DEVICE_NAME);
+
+  Serial.println("Setup complete.");
+  Serial.println("Press the SOS button to test.");
 }
 
 void loop() {
-  if (SOS_BUTTON_PIN < 0) {
-    delay(100);
-    return;
+  gps.update();
+
+  unsigned long now = millis();
+
+  if (now - lastGPSUpdate >= GPS_UPDATE_INTERVAL_MS) {
+    lastGPSUpdate = now;
+
+    GPSLocation location = gps.getLocation();
+
+    if (location.valid) {
+      String message = "LAT:";
+      message += String(location.latitude, 6);
+      message += ",LON:";
+      message += String(location.longitude, 6);
+      Serial.println(message);
+    } else {
+      Serial.println("GPS_WAITING_FOR_FIX");
+    }
   }
 
   bool rawButtonState = digitalRead(SOS_BUTTON_PIN);
 
   if (rawButtonState != lastRawButtonState) {
-    lastDebounceTime = millis();
+    lastDebounceTime = now;
     lastRawButtonState = rawButtonState;
   }
 
-  if (millis() - lastDebounceTime >= BUTTON_DEBOUNCE_MS) {
+  if (now - lastDebounceTime >= BUTTON_DEBOUNCE_MS) {
     if (rawButtonState != stableButtonState) {
       stableButtonState = rawButtonState;
 
@@ -82,6 +97,5 @@ void loop() {
     }
   }
 
-  // Non-blocking GPS/BLE/storage tasks will be added here.
   delay(5);
 }

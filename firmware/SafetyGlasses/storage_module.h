@@ -8,31 +8,41 @@
 
 class StorageModule {
 public:
+  // Call only after the correct SD interface and pin mapping
+  // have been verified for this specific ESP32-S3 board.
   bool begin(uint8_t chipSelectPin) {
-    ready = SD.begin(chipSelectPin);
+    ready = false;
 
-    if (ready) {
-      Serial.println("microSD initialized.");
-    } else {
-      Serial.println("microSD initialization failed.");
-    }
+    Serial.println(
+      "SD initialization requested. "
+      "Verify board-specific wiring before use."
+    );
 
-    return ready;
+    // Generic SPI initialization is intentionally disabled
+    // until the board's SD pin mapping is confirmed.
+    (void)chipSelectPin;
+
+    Serial.println("microSD initialization skipped.");
+    return false;
   }
 
   bool saveText(const char *path, const String &content) {
-    if (!ready) return false;
-
-    File file = SD.open(path, FILE_APPEND);
-    if (!file) {
-      Serial.println("Could not open file.");
+    if (!ready) {
+      Serial.println("microSD unavailable; text not saved.");
       return false;
     }
 
-    file.println(content);
+    File file = SD.open(path, FILE_APPEND);
+
+    if (!file) {
+      Serial.println("Could not open SD file.");
+      return false;
+    }
+
+    size_t written = file.println(content);
     file.close();
 
-    return true;
+    return written > 0;
   }
 
   bool isReady() const {

@@ -8,20 +8,15 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// Custom UUIDs for this project.
-// Use these same UUIDs in the Android app.
-#define BLE_SERVICE_UUID \
-  "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
-
-#define BLE_CHARACTERISTIC_UUID \
-  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+#include "config.h"
 
 class BluetoothModule {
 public:
   bool begin(const char *deviceName) {
     BLEDevice::init(deviceName);
 
-    BLEServer *server = BLEDevice::createServer();
+    server = BLEDevice::createServer();
+    server->setCallbacks(new ServerCallbacks(this));
 
     BLEService *service =
       server->createService(BLE_SERVICE_UUID);
@@ -33,28 +28,64 @@ public:
     );
 
     characteristic->addDescriptor(new BLE2902());
-
     characteristic->setValue("READY");
+
     service->start();
 
-    BLEAdvertising *advertising =
-      BLEDevice::getAdvertising();
-
+    BLEAdvertising *advertising = BLEDevice::getAdvertising();
     advertising->addServiceUUID(BLE_SERVICE_UUID);
     advertising->start();
 
+    Serial.println("BLE advertising started");
     return true;
   }
 
   void sendMessage(const String &message) {
-    if (characteristic == nullptr) return;
+    if (characteristic == nullptr) {
+      Serial.println("BLE not initialized");
+      return;
+    }
 
     characteristic->setValue(message.c_str());
-    characteristic->notify();
+
+    if (deviceConnected) {
+      characteristic->notify();
+      Serial.println("BLE notification sent to connected device");
+    } else {
+      Serial.println("BLE message updated; no phone connected");
+    }
+
+    Serial.println(message);
+  }
+
+  bool isConnected() const {
+    return deviceConnected;
   }
 
 private:
+  BLEServer *server = nullptr;
   BLECharacteristic *characteristic = nullptr;
+  bool deviceConnected = false;
+
+  class ServerCallbacks : public BLEServerCallbacks {
+  public:
+    explicit ServerCallbacks(BluetoothModule *module)
+      : module(module) {}
+
+    void onConnect(BLEServer *server) override {
+      module->deviceConnected = true;
+      Serial.println("BLE phone connected");
+    }
+
+    void onDisconnect(BLEServer *server) override {
+      module->deviceConnected = false;
+      Serial.println("BLE phone disconnected");
+      BLEDevice::startAdvertising();
+    }
+
+  private:
+    BluetoothModule *module;
+  };
 };
 
 #endif
