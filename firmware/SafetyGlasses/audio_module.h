@@ -3,26 +3,43 @@
 #define AUDIO_MODULE_H
 
 #include <Arduino.h>
-#include "driver/i2s_std.h"
+#include <ESP_I2S.h>
 
 class AudioModule {
 public:
   bool begin() {
-    // I2S pin mapping and initialization will be
-    // completed after verifying the exact board wiring.
-    Serial.println("Audio module prepared.");
-    Serial.println("Waiting for verified I2S pin configuration.");
+    i2s.setPins(14, 47, -1, 48, -1);
 
-    return false;
+    if (!i2s.begin(
+          I2S_MODE_STD,
+          16000,
+          I2S_DATA_BIT_WIDTH_32BIT,
+          I2S_SLOT_MODE_MONO)) {
+      Serial.println("Microphone initialization FAILED");
+      return false;
+    }
+
+    Serial.println("Microphone initialized");
+    return true;
   }
 
-  bool isReady() const {
-    return initialized;
+  uint32_t readSoundLevel() {
+    uint64_t total = 0;
+    const int count = 200;
+
+    for (int i = 0; i < count; i++) {
+      int32_t sample = i2s.read();
+
+      total += sample < 0
+          ? -(int64_t)sample
+          : (int64_t)sample;
+    }
+
+    return total / count;
   }
 
 private:
-  bool initialized = false;
-  i2s_chan_handle_t rxHandle = nullptr;
+  I2SClass i2s;
 };
 
 #endif

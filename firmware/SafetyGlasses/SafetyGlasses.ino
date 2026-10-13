@@ -3,6 +3,7 @@
 #include "config.h"
 #include "gps_module.h"
 #include "bluetooth_module.h"
+#include "audio_module.h"
 
 enum SystemState {
   SYSTEM_READY,
@@ -14,6 +15,7 @@ SystemState systemState = SYSTEM_READY;
 HardwareSerial GPSSerial(1);
 GPSModule gps;
 BluetoothModule bluetooth;
+AudioModule audio;
 
 bool lastRawButtonState = HIGH;
 bool stableButtonState = HIGH;
@@ -53,6 +55,7 @@ void setup() {
 
   gps.begin(GPSSerial, GPS_BAUD_RATE);
   bluetooth.begin(DEVICE_NAME);
+  audio.begin();
 
   Serial.println("Setup complete.");
   Serial.println("Press the SOS button to test.");
@@ -96,6 +99,14 @@ void loop() {
       }
     }
   }
+
+  static unsigned long lastAudioPrint = 0;
+
+if (millis() - lastAudioPrint >= 1000) {
+  lastAudioPrint = millis();
+  Serial.print("Sound level: ");
+  Serial.println(audio.readSoundLevel());
+}
 
   delay(5);
 }
